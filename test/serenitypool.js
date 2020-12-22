@@ -20,12 +20,13 @@ contract('SerenityPool', (accounts) => {
             "0x968b94e8580704747350083c04f3079961ed654fd74523cce7f3d5e1a2a7193a10ada2c5835a7cc1dc220a4c24e5d86b12a8677f6097d3ae23fafbabad666c53e83b95fdba8f1d605d9a383a0cb3af5d61c0adbf6b78016eef366e3a4c979cd0",
             "0xb191e72eba966a5d8409fae2c4e65b1475c16a024167e27571c5d30774991fa3",{from: accounts[0]})
         let ether10 = web3.utils.toWei("10", 'ether');
+        let ether10gwei = web3.utils.fromWei(ether10, 'Gwei');
         let tx = await poolInstance.deposit({from: accounts[1], value: ether10})
         truffleAssert.eventEmitted(tx, 'New', (ev) => {
-            return ev._from === accounts[1] && ev._value == ether10;
+            return ev._from === accounts[1] && ev._value == ether10gwei;
         });
         const unclaimed = await poolInstance.getUnclaimed.call();
-        assert.equal(unclaimed.valueOf(), ether10, "10 ethers should be unclaimed");
+        assert.equal(unclaimed.valueOf(), ether10gwei, "10 ethers should be unclaimed");
     });
     it('should deposit to deposit contract', async () => {
         let accounts = await web3.eth.getAccounts();
@@ -34,9 +35,10 @@ contract('SerenityPool', (accounts) => {
             "0x968b94e8580704747350083c04f3079961ed654fd74523cce7f3d5e1a2a7193a10ada2c5835a7cc1dc220a4c24e5d86b12a8677f6097d3ae23fafbabad666c53e83b95fdba8f1d605d9a383a0cb3af5d61c0adbf6b78016eef366e3a4c979cd0",
             "0xb191e72eba966a5d8409fae2c4e65b1475c16a024167e27571c5d30774991fa3",{from: accounts[0]})
         let ether32 = web3.utils.toWei("32", 'ether');
+        let ether32gwei = web3.utils.fromWei(ether32, 'Gwei');
         let tx = await poolInstance.deposit({from: accounts[1], value: ether32})
         truffleAssert.eventEmitted(tx, 'New', (ev) => {
-            return ev._from === accounts[1] && ev._value == ether32;
+            return ev._from === accounts[1] && ev._value == ether32gwei;
         });
         const unclaimed = await poolInstance.getUnclaimed.call();
         assert.equal(unclaimed.valueOf(), 0, "0 ethers should be unclaimed as 32eth were sent to deposit contract");

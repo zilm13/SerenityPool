@@ -11,13 +11,13 @@ import "./DepositContract.sol";
 
 contract SerenityPool {
     IDepositContract public depositContract;
-    uint256 VALIDATOR_DEPOSIT = 32_000_000_000_000_000_000;
+    uint64 constant VALIDATOR_DEPOSIT = 32_000_000_000;
     address public owner;
     DepositQueue validatorQueue;
     FundDeque fundDeque;
-    uint256 unclaimedFunds;
+    uint64 unclaimedFunds;
 
-    event New(address indexed _from, uint256 _value);
+    event New(address indexed _from, uint64 _value);
 
     constructor() public {
         depositContract = IDepositContract(0x345cA3e014Aaf5dcA488057592ee47305D9B3e10);
@@ -27,11 +27,11 @@ contract SerenityPool {
         owner = msg.sender;
     }
 
-    modifier restricted() {
+    modifier onlyOwner() {
         if (msg.sender == owner) _;
     }
 
-    function preLoadCredentials(bytes calldata _pubkey, bytes calldata _withdrawal_credentials, bytes calldata _signature, bytes32 _deposit_data_root) public restricted {
+    function preLoadCredentials(bytes calldata _pubkey, bytes calldata _withdrawal_credentials, bytes calldata _signature, bytes32 _deposit_data_root) public onlyOwner {
         Deposit memory deposit = Deposit({
 		    pubkey : _pubkey,
 		    withdrawal_credentials : _withdrawal_credentials,
@@ -42,25 +42,30 @@ contract SerenityPool {
 
     function deposit() payable public returns (bool sufficient) {
         require(validatorQueue.isNotEmpty());
+        // Check deposit amount
+        require(msg.value % 1 gwei == 0, "Deposit value not multiple of gwei");
+        uint deposit_amount = msg.value / 1 gwei;
+        require(deposit_amount <= type(uint64).max, "Deposit value too high");
+        uint64 deposit_gwei = uint64(deposit_amount);
         Fund memory fund = Fund({
             from : msg.sender,
-            amount : msg.value
+            amount : deposit_gwei
         });
         fundDeque.pushRight(fund);
-        unclaimedFunds += msg.value;
+        unclaimedFunds += deposit_gwei;
         makeDeposit();
-        emit New(msg.sender, msg.value);
+        emit New(msg.sender, deposit_gwei);
         return true;
     }
 
     function makeDeposit() private {
         if (unclaimedFunds < VALIDATOR_DEPOSIT)
             return;
-        uint256 counter = 0;
+        uint64 counter = 0;
         FundDeque issuanceDeque = new FundDeque();
         while (counter < VALIDATOR_DEPOSIT) {
             Fund memory fund = fundDeque.popLeft();
-            uint256 needed = VALIDATOR_DEPOSIT - counter;
+            uint64 needed = VALIDATOR_DEPOSIT - counter;
             if (fund.amount > needed) {
                 Fund memory depositPart = Fund({
                     from : fund.from,
