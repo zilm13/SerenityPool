@@ -8,19 +8,23 @@ pragma experimental ABIEncoderV2;
 import "./lib/DepositQueue.sol";
 import "./lib/FundDeque.sol";
 import "./DepositContract.sol";
+import "./structs/Validator.sol";
 
 contract SerenityPool {
     IDepositContract public depositContract;
     uint64 constant VALIDATOR_DEPOSIT = 32_000_000_000;
+    uint256 constant VALIDATOR_TTL = 365*24*60*60; // 1 year
     address public owner;
     DepositQueue validatorQueue;
     FundDeque fundDeque;
     uint64 unclaimedFunds;
+    mapping(bytes => Validator) validators;
 
     event New(address indexed _from, uint64 _value);
+    event NewValidator(bytes _pubkey, uint256 _time);
 
-    constructor() public {
-        depositContract = IDepositContract(0x345cA3e014Aaf5dcA488057592ee47305D9B3e10);
+    constructor(address depositContractAddress) public {
+        depositContract = IDepositContract(depositContractAddress);
         unclaimedFunds = 0;
         validatorQueue = new DepositQueue();
         fundDeque = new FundDeque();
@@ -81,13 +85,24 @@ contract SerenityPool {
             }
         }
         unclaimedFunds -= VALIDATOR_DEPOSIT;
+        // FIXME: this approach assumes that the last funder pays for deposit gas, while all intermediate not
         makeIssuance(issuanceDeque);
         makeDeposit();
     }
 
     function makeIssuance(FundDeque _issuanceDeque) private {
-        // TODO
+        Deposit memory validator = validatorQueue.dequeue();
+        depositContract.deposit {value: (1 gwei) * uint256(VALIDATOR_DEPOSIT)} (validator.pubkey, validator.withdrawal_credentials, validator.signature, validator.deposit_data_root);
+        validators[validator.pubkey] =  Validator({
+            withdrawal_credentials : validator.withdrawal_credentials,
+            shares : _issuanceDeque,
+            end_of_life: block.timestamp + VALIDATOR_TTL});
+        emit NewValidator(validator.pubkey, block.timestamp);
     }
+
+    // TODO: 100% shares votes for exit -> EXIT
+    // TODO: Shares claim for validator funds after end of life, get their funds
+    // TODO: withdrawal contract deployed when deposit is made
 
     function getUnclaimed() view public returns (uint256) {
         return unclaimedFunds;
