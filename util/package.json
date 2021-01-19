@@ -1,0 +1,10 @@
+{
+  "name": "util",
+  "version": "0.0.1",
+  "scripts": {
+    "test": "mocha test"
+  },
+  "devDependencies": {
+    "mocha": "^8.1.1"
+  }
+}

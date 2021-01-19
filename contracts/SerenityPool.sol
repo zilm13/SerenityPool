@@ -9,6 +9,7 @@ import "./lib/DepositQueue.sol";
 import "./lib/FundDeque.sol";
 import "./DepositContract.sol";
 import "./structs/Validator.sol";
+import "./WithdrawalContract.sol";
 
 contract SerenityPool {
     IDepositContract public depositContract;
@@ -22,6 +23,8 @@ contract SerenityPool {
 
     event New(address indexed _from, uint64 _value);
     event NewValidator(bytes _pubkey, uint256 _time);
+    // TODO: remove me when not needed
+    event Logger(bytes data);
 
     constructor(address depositContractAddress) public {
         depositContract = IDepositContract(depositContractAddress);
@@ -36,12 +39,31 @@ contract SerenityPool {
     }
 
     function preLoadCredentials(bytes calldata _pubkey, bytes calldata _withdrawal_credentials, bytes calldata _signature, bytes32 _deposit_data_root) public onlyOwner {
+        IWithdrawalContract withdrawal = new WithdrawalContract{salt: keccak256(_pubkey)}();
+        address withdrawalAddress = withdrawal.getAddress();
+        bytes memory withdrawal_credentials = _withdrawal_credentials;
+        address expectedWithdrawalAddress = toAddress(withdrawal_credentials, 12);
+        require(withdrawalAddress == expectedWithdrawalAddress);
         Deposit memory deposit = Deposit({
 		    pubkey : _pubkey,
 		    withdrawal_credentials : _withdrawal_credentials,
 		    signature : _signature,
-		    deposit_data_root : _deposit_data_root});
+		    deposit_data_root : _deposit_data_root,
+            withdrawalContract: withdrawal});
 		validatorQueue.enqueue(deposit);
+    }
+
+    // Copied from https://github.com/GNSPS/solidity-bytes-utils/blob/master/contracts/BytesLib.sol
+    function toAddress(bytes memory _bytes, uint256 _start) internal pure returns (address) {
+        require(_start + 20 >= _start, "toAddress_overflow");
+        require(_bytes.length >= _start + 20, "toAddress_outOfBounds");
+        address tempAddress;
+
+        assembly {
+            tempAddress := div(mload(add(add(_bytes, 0x20), _start)), 0x1000000000000000000000000)
+        }
+
+        return tempAddress;
     }
 
     function deposit() payable public returns (bool sufficient) {
@@ -96,13 +118,17 @@ contract SerenityPool {
         validators[validator.pubkey] =  Validator({
             withdrawal_credentials : validator.withdrawal_credentials,
             shares : _issuanceDeque,
-            end_of_life: block.timestamp + VALIDATOR_TTL});
+            end_of_life: block.timestamp + VALIDATOR_TTL,
+            withdrawalContract: validator.withdrawalContract});
         emit NewValidator(validator.pubkey, block.timestamp);
     }
 
     // TODO: 100% shares votes for exit -> EXIT
+
     // TODO: Shares claim for validator funds after end of life, get their funds
-    // TODO: withdrawal contract deployed when deposit is made
+    function initiateWithdrawal(bytes calldata pubkey) public returns (bool) {
+
+    }
 
     function getUnclaimed() view public returns (uint256) {
         return unclaimedFunds;
