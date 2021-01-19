@@ -1,7 +1,7 @@
 # SerenityPool
 PoC (Proof of Concept) of Eth2 pool with shared validator ownership and control made to validate system contract design and requirements.
   
-Start developments with 
+Start development with 
 ```shell
 npm install
 ```
@@ -18,7 +18,7 @@ truffle test
 ```
 
 ### util/
-Various utils to make tests possible. Helpers for generation of fixtures. Run tests for it with
+Various utils to make tests possible. Helpers for generation of fixtures. Run util tests with
 ```shell
 cd util
 npm test
