@@ -10,51 +10,69 @@ import "./lib/FundDeque.sol";
 import "./DepositContract.sol";
 import "./structs/Validator.sol";
 import "./WithdrawalContract.sol";
+import "./Eth2Gate.sol";
 
 contract SerenityPool {
-    IDepositContract public depositContract;
-    uint64 constant VALIDATOR_DEPOSIT = 32_000_000_000;
+    uint64 constant VALIDATOR_DEPOSIT = 32_000_000_000; // 32 ETH
     uint256 constant VALIDATOR_TTL = 365*24*60*60; // 1 year
+    bytes4 constant WITHDRAW_FUNC_SIGNATURE = 0x0968f264; // withdraw(bytes)
+    IDepositContract public depositContract;
+    IEth2Gate public eth2Gate;
     address public owner;
     DepositQueue validatorQueue;
     FundDeque fundDeque;
     uint64 unclaimedFunds;
     mapping(bytes => Validator) validators;
 
-    event New(address indexed _from, uint64 _value);
-    event NewValidator(bytes _pubkey, uint256 _time);
+    event NewFund(address indexed _from, uint64 _value);
+    event NewValidator(bytes _pubKey, uint256 _time);
     // TODO: remove me when not needed
     event Logger(bytes data);
 
-    constructor(address depositContractAddress) public {
-        depositContract = IDepositContract(depositContractAddress);
+    modifier onlyOwner() {
+        if (msg.sender == owner) _;
+    }
+
+    constructor(address _depositContractAddress, address _eth2GateAddress) public {
+        depositContract = IDepositContract(_depositContractAddress);
+        eth2Gate = IEth2Gate(_eth2GateAddress);
         unclaimedFunds = 0;
         validatorQueue = new DepositQueue();
         fundDeque = new FundDeque();
         owner = msg.sender;
     }
 
-    modifier onlyOwner() {
-        if (msg.sender == owner) _;
-    }
-
-    function preLoadCredentials(bytes calldata _pubkey, bytes calldata _withdrawal_credentials, bytes calldata _signature, bytes32 _deposit_data_root) public onlyOwner {
-        IWithdrawalContract withdrawal = new WithdrawalContract{salt: keccak256(_pubkey)}();
-        address withdrawalAddress = withdrawal.getAddress();
-        bytes memory withdrawal_credentials = _withdrawal_credentials;
-        address expectedWithdrawalAddress = toAddress(withdrawal_credentials, 12);
-        require(withdrawalAddress == expectedWithdrawalAddress);
-        Deposit memory deposit = Deposit({
-		    pubkey : _pubkey,
-		    withdrawal_credentials : _withdrawal_credentials,
-		    signature : _signature,
-		    deposit_data_root : _deposit_data_root,
-            withdrawalContract: withdrawal});
+    // Validator hosting service owner submits credentials for future validators
+    function preLoadCredentials(
+        bytes calldata _pubKey,
+        bytes calldata _withdrawalCredentials,
+        bytes calldata _signature,
+        bytes32 _depositDataRoot,
+        bytes calldata _voluntaryExit,
+        bytes calldata _exitSignature
+    )
+    public
+    onlyOwner
+    {
+        IWithdrawalContract withdrawal = _validateWithdrawalAddress(_pubKey, _withdrawalCredentials);
+        // TODO: when possible with EIP-2537 or similar bls.verify(_voluntary_exit, _exit_signature, _pubkey);
+        // TODO: verify that epoch in _voluntary_exit is 1 year ahead
+        // (issue: there could be a big lag between submitting credentials and starting actual validator)
+        Deposit memory deposit =  Deposit({
+            pubKey : _pubKey,
+            withdrawalCredentials : _withdrawalCredentials,
+            signature : _signature,
+            depositDataRoot : _depositDataRoot,
+            voluntaryExit: _voluntaryExit,
+            exitSignature: _exitSignature,
+            withdrawalContract: withdrawal
+        });
 		validatorQueue.enqueue(deposit);
     }
 
+    // Converts bytes to address
     // Copied from https://github.com/GNSPS/solidity-bytes-utils/blob/master/contracts/BytesLib.sol
-    function toAddress(bytes memory _bytes, uint256 _start) internal pure returns (address) {
+    function _toAddress(bytes memory _bytes, uint256 _start) internal pure returns (address) {
         require(_start + 20 >= _start, "toAddress_overflow");
         require(_bytes.length >= _start + 20, "toAddress_outOfBounds");
         address tempAddress;
@@ -66,24 +84,84 @@ contract SerenityPool {
         return tempAddress;
     }
 
+    // TODO: WHERE IS MY TOKEN???
+    // FIXME: return type is unnecessary
     function deposit() payable public returns (bool sufficient) {
         require(validatorQueue.isNotEmpty());
         // Check deposit amount
         require(msg.value % 1 gwei == 0, "Deposit value not multiple of gwei");
-        uint deposit_amount = msg.value / 1 gwei;
-        require(deposit_amount <= type(uint64).max, "Deposit value too high");
-        uint64 deposit_gwei = uint64(deposit_amount);
+        uint depositAmount = msg.value / 1 gwei;
+        require(depositAmount <= type(uint64).max, "Deposit value too high");
+        uint64 depositGwei = uint64(depositAmount);
         Fund memory fund = Fund({
             from : msg.sender,
-            amount : deposit_gwei
+            amount : depositGwei
         });
         fundDeque.pushRight(fund);
-        unclaimedFunds += deposit_gwei;
+        unclaimedFunds += depositGwei;
         makeDeposit();
-        emit New(msg.sender, deposit_gwei);
+        emit NewFund(msg.sender, depositGwei);
         return true;
     }
 
+    // TODO: 100% shares votes for exit -> EXIT. As we need VoluntaryExit signed by Validator, we could only
+   // submit request to validator hosting.
+
+    // Initiates VoluntaryExit.
+    // Should be executed by validator hosting, but shares are protected as anyone could call it
+    // TODO: store gas and fee for this operation
+    function initiateExit(bytes calldata _pubKey) public {
+        Validator memory validator = validators[_pubKey];
+        require(block.timestamp > validator.endOfLife);
+        eth2Gate.sendSignedVoluntaryExit(
+            validator.voluntaryExit,
+            validator.exitSignature,
+            address(this),
+            abi.encodeWithSignature("withdraw(bytes)", _pubKey)
+        );
+    }
+
+    // Calls Withdrawal System Contract to get money from exited validator
+    function withdraw(bytes calldata _pubKey) public {
+        Validator memory validator = validators[_pubKey];
+        // TODO: require by eth2 OPCODE that validator is exited
+
+        // TODO: call withdraw system contract
+        // TODO: if it's ok, claim money from withdrawal contract and destroy it
+        // TODO: if not ok??
+        // TODO: eat service fee
+    }
+
+    // Claims user's funds
+    // TODO
+    function redeem(bytes calldata _pubKey) public {
+    }
+
+    // Returns value of funds queued for validator deposits
+    function getUnclaimed() view public returns (uint256) {
+        return unclaimedFunds;
+    }
+
+    // 1. Creates WithdrawalContract
+    // 2. Validates that provided _withdrawalCredentials matches WithdrawalContract address corresponding to validator
+    function _validateWithdrawalAddress(
+        bytes calldata _pubKey,
+        bytes calldata _withdrawalCredentials
+    )
+    private
+    returns (
+        IWithdrawalContract
+    )
+    {
+        IWithdrawalContract withdrawal = new WithdrawalContract{salt: keccak256(_pubKey)}();
+        address withdrawalAddress = withdrawal.getAddress();
+        bytes memory withdrawalCredentials = _withdrawalCredentials;
+        address expectedWithdrawalAddress = _toAddress(withdrawalCredentials, 12);
+        require(withdrawalAddress == expectedWithdrawalAddress);
+        return withdrawal;
+    }
+
+    // Recursively deposits unclaimed funds until there are enough funds to create new validators
     function makeDeposit() private {
         if (unclaimedFunds < VALIDATOR_DEPOSIT)
             return;
@@ -95,10 +173,12 @@ contract SerenityPool {
             if (fund.amount > needed) {
                 Fund memory depositPart = Fund({
                     from : fund.from,
-                    amount : needed});
+                    amount : needed
+                });
                 Fund memory left = Fund({
                     from : fund.from,
-                    amount : fund.amount - needed});
+                    amount : fund.amount - needed
+                });
                 issuanceDeque.pushRight(depositPart);
                 fundDeque.pushLeft(left);
             } else {
@@ -112,25 +192,23 @@ contract SerenityPool {
         makeDeposit();
     }
 
+    // Sends funds to ETH2 Deposit contract, internally stores all shares info about appropriate validator deposits
     function makeIssuance(FundDeque _issuanceDeque) private {
         Deposit memory validator = validatorQueue.dequeue();
-        depositContract.deposit {value: (1 gwei) * uint256(VALIDATOR_DEPOSIT)} (validator.pubkey, validator.withdrawal_credentials, validator.signature, validator.deposit_data_root);
-        validators[validator.pubkey] =  Validator({
-            withdrawal_credentials : validator.withdrawal_credentials,
+        depositContract.deposit {value: (1 gwei) * uint256(VALIDATOR_DEPOSIT)} (
+            validator.pubKey,
+            validator.withdrawalCredentials,
+            validator.signature,
+            validator.depositDataRoot
+        );
+        validators[validator.pubKey] =  Validator({
+            withdrawalCredentials : validator.withdrawalCredentials,
             shares : _issuanceDeque,
-            end_of_life: block.timestamp + VALIDATOR_TTL,
-            withdrawalContract: validator.withdrawalContract});
-        emit NewValidator(validator.pubkey, block.timestamp);
-    }
-
-    // TODO: 100% shares votes for exit -> EXIT
-
-    // TODO: Shares claim for validator funds after end of life, get their funds
-    function initiateWithdrawal(bytes calldata pubkey) public returns (bool) {
-
-    }
-
-    function getUnclaimed() view public returns (uint256) {
-        return unclaimedFunds;
+            endOfLife: block.timestamp + VALIDATOR_TTL,
+            voluntaryExit: validator.voluntaryExit,
+            exitSignature: validator.exitSignature,
+            withdrawalContract: validator.withdrawalContract
+        });
+        emit NewValidator(validator.pubKey, block.timestamp);
     }
 }

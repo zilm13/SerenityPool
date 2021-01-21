@@ -5,8 +5,10 @@ import "../lib/FundDeque.sol";
 import "../WithdrawalContract.sol";
 
 struct Validator {
-    bytes withdrawal_credentials;
+    bytes withdrawalCredentials;
     FundDeque shares;
-    uint256 end_of_life;
+    uint256 endOfLife;
+    bytes voluntaryExit;
+    bytes exitSignature;
     IWithdrawalContract withdrawalContract;
 }

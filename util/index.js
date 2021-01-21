@@ -41,6 +41,10 @@ function strip0x(str) {
 }
 exports.strip0x = strip0x;
 
+/**
+ * @param str hex string
+ * @returns {string} little endian big int string
+ */
 function convertLittleEndianToInt(str) {
     str = strip0x(str);
     var data = str.match(/../g);
@@ -59,7 +63,7 @@ function convertLittleEndianToInt(str) {
     var res = view.getBigInt64(0, 1);
     return res.toString(10);
 }
-exports.convertLittleEndianToInt = convertLittleEndianToInt
+exports.convertLittleEndianToInt = convertLittleEndianToInt;
 
 function calcCreate2Address(address, salt, callData) {
     requireBuffer(address);
@@ -70,7 +74,7 @@ function calcCreate2Address(address, salt, callData) {
     let hash = keccak('keccak256').update(value).digest('hex');
     return wrapWithBuffer(hash.slice(24));
 }
-exports.calcCreate2Address = calcCreate2Address
+exports.calcCreate2Address = calcCreate2Address;
 
 async function generateDepositCredentials(mainContractAddress, withdrawalContractCallData) {
     requireBuffer(mainContractAddress);
@@ -82,38 +86,38 @@ async function generateDepositCredentials(mainContractAddress, withdrawalContrac
     const salt = keccak('keccak256').update(wrapWithBuffer(publicKey.toBytes())).digest('hex');
     // withdrawal_credentials
     const withdrawalContractAddress = calcCreate2Address(mainContractAddress, Buffer(salt, 'hex'), withdrawalContractCallData);
-    const withdrawal_credentials = Buffer.concat([wrapWithBuffer('010000000000000000000000'), withdrawalContractAddress]);
+    const withdrawalCredentials = Buffer.concat([wrapWithBuffer('010000000000000000000000'), withdrawalContractAddress]);
     // signature
-    const deposit_message_root = computeDepositMessageRoot(wrapWithBuffer(publicKey.toBytes()), withdrawal_credentials, DEPOSIT_AMOUNT);
+    const depositMessageRoot = computeDepositMessageRoot(wrapWithBuffer(publicKey.toBytes()), withdrawalCredentials, DEPOSIT_AMOUNT);
     const domain = computeDepositDomain();
-    const signing_root = computeSigningRoot(deposit_message_root, domain);
-    const signature = bls.sign(secretKey.toBytes(), signing_root)
+    const signingRoot = computeSigningRoot(depositMessageRoot, domain);
+    const signature = bls.sign(secretKey.toBytes(), signingRoot)
     // deposit_root
-    const deposit_root = computeDepositDataRoot(wrapWithBuffer(publicKey.toBytes()), withdrawal_credentials, DEPOSIT_AMOUNT, wrapWithBuffer(signature))
+    const deposit_root = computeDepositDataRoot(wrapWithBuffer(publicKey.toBytes()), withdrawalCredentials, DEPOSIT_AMOUNT, wrapWithBuffer(signature))
 
     return {
         pubkey: wrapWithBuffer(secretKey.toPublicKey().toBytes()).toString('hex'),
-        withdrawal_credentials: withdrawal_credentials.toString('hex'),
+        withdrawalCredentials: withdrawalCredentials.toString('hex'),
         amount: DEPOSIT_AMOUNT,
         signature: wrapWithBuffer(signature).toString('hex'),
-        deposit_root: wrapWithBuffer(deposit_root).toString('hex'),
+        depositRoot: wrapWithBuffer(deposit_root).toString('hex'),
     }
 }
-exports.generateDepositCredentials = generateDepositCredentials
+exports.generateDepositCredentials = generateDepositCredentials;
 
-function computeDepositMessageRoot(pubkey, withdrawal_credentials, amount) {
-    requireBuffer(pubkey);
-    requireBuffer(withdrawal_credentials);
+function computeDepositMessageRoot(pubKey, withdrawalCredentials, amount) {
+    requireBuffer(pubKey);
+    requireBuffer(withdrawalCredentials);
     const depositMessage = {};
-    depositMessage.pubkey = pubkey;
-    depositMessage.withdrawal_credentials = withdrawal_credentials;
+    depositMessage.pubKey = pubKey;
+    depositMessage.withdrawalCredentials = withdrawalCredentials;
     depositMessage.amount = BigInt(amount);
     const DepositMessage = new ssz.ContainerType({
         fields: {
-            pubkey: new ssz.ByteVectorType({
+            pubKey: new ssz.ByteVectorType({
                 length: 48,
             }),
-            withdrawal_credentials: new ssz.ByteVectorType({
+            withdrawalCredentials: new ssz.ByteVectorType({
                 length: 32,
             }),
             amount: new ssz.BigIntUintType({
@@ -123,7 +127,7 @@ function computeDepositMessageRoot(pubkey, withdrawal_credentials, amount) {
     });
     return wrapWithBuffer(DepositMessage.hashTreeRoot(depositMessage));
 }
-exports.computeDepositMessageRoot = computeDepositMessageRoot
+exports.computeDepositMessageRoot = computeDepositMessageRoot;
 
 function computeSigningRoot(objectRoot, domain) {
     requireBuffer(objectRoot);
@@ -143,7 +147,7 @@ function computeSigningRoot(objectRoot, domain) {
     });
     return wrapWithBuffer(SigningData.hashTreeRoot(domainWrappedObject));
 }
-exports.computeSigningRoot = computeSigningRoot
+exports.computeSigningRoot = computeSigningRoot;
 
 function computeDepositDomain() {
     const forkVersion = wrapWithBuffer('00000000'); // MAINNET
@@ -151,7 +155,7 @@ function computeDepositDomain() {
     const forkDataRoot = computeDepositForkDataRoot(forkVersion);
     return Buffer.concat([domainType, forkDataRoot.slice(0, 28)])
 }
-exports.computeDepositDomain = computeDepositDomain
+exports.computeDepositDomain = computeDepositDomain;
 
 function computeDepositForkDataRoot(forkVersion) {
     requireBuffer(forkVersion);
@@ -171,23 +175,23 @@ function computeDepositForkDataRoot(forkVersion) {
     });
     return wrapWithBuffer(ForkData.hashTreeRoot(forkData));
 }
-exports.computeDepositForkDataRoot = computeDepositForkDataRoot
+exports.computeDepositForkDataRoot = computeDepositForkDataRoot;
 
-function computeDepositDataRoot(pubkey, withdrawal_credentials, amount, signature) {
-    requireBuffer(pubkey);
-    requireBuffer(withdrawal_credentials);
+function computeDepositDataRoot(pubKey, withdrawalCredentials, amount, signature) {
+    requireBuffer(pubKey);
+    requireBuffer(withdrawalCredentials);
     requireBuffer(signature);
     const depositData = {};
-    depositData.pubkey = pubkey;
-    depositData.withdrawal_credentials = withdrawal_credentials;
+    depositData.pubKey = pubKey;
+    depositData.withdrawalCredentials = withdrawalCredentials;
     depositData.amount = BigInt(amount);
     depositData.signature = signature;
     const DepositData = new ssz.ContainerType({
         fields: {
-            pubkey: new ssz.ByteVectorType({
+            pubKey: new ssz.ByteVectorType({
                 length: 48,
             }),
-            withdrawal_credentials: new ssz.ByteVectorType({
+            withdrawalCredentials: new ssz.ByteVectorType({
                 length: 32,
             }),
             amount: new ssz.BigIntUintType({
@@ -200,4 +204,9 @@ function computeDepositDataRoot(pubkey, withdrawal_credentials, amount, signatur
     });
     return wrapWithBuffer(DepositData.hashTreeRoot(depositData));
 }
-exports.computeDepositDataRoot = computeDepositDataRoot
+exports.computeDepositDataRoot = computeDepositDataRoot;
+
+function calculateFunctionSignature(functionInterface) {
+    return keccak('keccak256').update(functionInterface).digest('hex').substr(0, 8);
+}
+exports.calculateFunctionSignature = calculateFunctionSignature;

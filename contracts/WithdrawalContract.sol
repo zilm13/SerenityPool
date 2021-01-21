@@ -4,7 +4,7 @@ pragma experimental ABIEncoderV2;
 
 // Withdrawal receiver contract
 interface IWithdrawalContract {
-    event Received(address, uint);
+    event Received(address _sender, uint _value);
     function withdraw() external;
     function getAddress() external view returns (address);
 }
@@ -12,12 +12,12 @@ interface IWithdrawalContract {
 contract WithdrawalContract is IWithdrawalContract {
     address payable public owner;
 
-    constructor() public {
-        owner = msg.sender;
-    }
-
     modifier onlyOwner() {
         if (msg.sender == owner) _;
+    }
+
+    constructor() public {
+        owner = msg.sender;
     }
 
     receive() external payable {
