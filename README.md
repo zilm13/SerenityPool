@@ -1,4 +1,4 @@
-# SerenityPool
+# SerenityPool [WIP]
 PoC (Proof of Concept) of Eth2 pool with shared validator funding and control made to validate system contract design and requirements.
 
 Users deposit any amount of money, which is fractional to the whole validator deposit, user funds are combined for a whole validator deposit, deposit is submitted and users are guaranteed to get a share of their investment after validator exit and withdrawal is initiated and processed. During the validator's active life user could split or sell his share, which is similar to bond without intermediate coupons but with guaranteed time of examination.
