@@ -86,7 +86,7 @@ contract SerenityPool {
 
     // TODO: WHERE IS MY TOKEN???
     // FIXME: return type is unnecessary
-    function deposit() payable public returns (bool sufficient) {
+    function deposit() payable public {
         require(validatorQueue.isNotEmpty());
         // Check deposit amount
         require(msg.value % 1 gwei == 0, "Deposit value not multiple of gwei");
@@ -101,7 +101,6 @@ contract SerenityPool {
         unclaimedFunds += depositGwei;
         makeDeposit();
         emit NewFund(msg.sender, depositGwei);
-        return true;
     }
 
     // TODO: 100% shares votes for exit -> EXIT. As we need VoluntaryExit signed by Validator, we could only

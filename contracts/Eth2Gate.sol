@@ -32,7 +32,7 @@ contract Eth2Gate is IEth2Gate {
         owner = msg.sender;
     }
 
-    // TODO: accept fee + callback gas, no callback, callback 1arg, 2arg.. functions
+    // TODO: accept fee + callback gas, no callback functions
     function sendSignedVoluntaryExit(
         bytes calldata _voluntaryExit,
         bytes calldata _signature,
