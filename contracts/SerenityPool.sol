@@ -54,7 +54,8 @@ contract SerenityPool {
     public
     onlyOwner
     {
-        IWithdrawalContract withdrawal = _validateWithdrawalAddress(_pubKey, _withdrawalCredentials);
+        IWithdrawalContract withdrawal = new WithdrawalContract{salt: keccak256(_pubKey)}();
+        _validateWithdrawalAddress(withdrawal, _withdrawalCredentials);
         // TODO: when possible with EIP-2537 or similar bls.verify(_voluntary_exit, _exit_signature, _pubkey);
         // TODO: verify that epoch in _voluntary_exit is 1 year ahead
         // (issue: there could be a big lag between submitting credentials and starting actual validator)
@@ -141,23 +142,17 @@ contract SerenityPool {
         return unclaimedFunds;
     }
 
-    // 1. Creates WithdrawalContract
-    // 2. Validates that provided _withdrawalCredentials matches WithdrawalContract address corresponding to validator
+    // Validates that provided _withdrawalCredentials matches WithdrawalContract address corresponding to validator
     function _validateWithdrawalAddress(
-        bytes calldata _pubKey,
+        IWithdrawalContract withdrawal,
         bytes calldata _withdrawalCredentials
     )
     private
-    returns (
-        IWithdrawalContract
-    )
     {
-        IWithdrawalContract withdrawal = new WithdrawalContract{salt: keccak256(_pubKey)}();
         address withdrawalAddress = withdrawal.getAddress();
         bytes memory withdrawalCredentials = _withdrawalCredentials;
         address expectedWithdrawalAddress = _toAddress(withdrawalCredentials, 12);
         require(withdrawalAddress == expectedWithdrawalAddress);
-        return withdrawal;
     }
 
     // Recursively deposits unclaimed funds until there are enough funds to create new validators
