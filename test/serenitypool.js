@@ -1,6 +1,7 @@
 const SerenityPool = artifacts.require("SerenityPool");
 const DepositContract = artifacts.require("DepositContract");
 const WithdrawalContract = artifacts.require("WithdrawalContract");
+const SystemContract = artifacts.require("SystemContract");
 const Eth2Gate = artifacts.require("Eth2Gate");
 const truffleAssert = require('truffle-assertions');
 const {wrapWithBuffer, convertLittleEndianToInt, generateDepositCredentials} = require("../util");
@@ -15,11 +16,26 @@ const valCredentials = {
 }
 
 contract('SerenityPool', (accounts) => {
+    before(async () => {
+        // ETH2 Withdrawals system contract
+        systemContractInstance = await SystemContract.new();
+        assert.ok(systemContractInstance);
+        let ether99 = web3.utils.toWei("99", 'ether');
+        await systemContractInstance.deposit({from: accounts[0], value: ether99})
+        let actualBalance = await web3.eth.getBalance(systemContractInstance.address);
+        let expectedBalance = web3.utils.toBN(ether99);
+        assert.strictEqual(actualBalance, ether99.toString(), "System contract was not funded");
+    });
     beforeEach(async () => {
+        // ETH2 Deposit Contract in ETH1
         depositInstance = await DepositContract.new();
         assert.ok(depositInstance);
+
+        // Mock of ETH2 Messages gate
         eth2Gate = await Eth2Gate.new();
         assert.ok(eth2Gate);
+
+        // Shared validator ownership pool
         poolInstance = await SerenityPool.new(depositInstance.address, eth2Gate.address);
         assert.ok(poolInstance);
         const creds = await generateDepositCredentials(wrapWithBuffer(poolInstance.address),
@@ -28,7 +44,7 @@ contract('SerenityPool', (accounts) => {
         valCredentials.withdrawalCredentials = '0x' + creds.withdrawalCredentials;
         valCredentials.signature = '0x' + creds.signature;
         valCredentials.depositRoot = '0x' + creds.depositRoot;
-    })
+    });
     it('should have 0 at start', async () => {
         const unclaimed = await poolInstance.getUnclaimed.call();
         assert.strictEqual(unclaimed.valueOf().toString(), '0', "0 wasn't initial unclaimed funding");
