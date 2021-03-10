@@ -16,7 +16,7 @@ contract WithdrawalContract is IWithdrawalContract {
         if (msg.sender == owner) _;
     }
 
-    constructor() public {
+    constructor() {
         owner = payable(msg.sender);
     }
 

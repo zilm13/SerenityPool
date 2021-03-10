@@ -33,7 +33,7 @@ contract SerenityPool {
         if (msg.sender == owner) _;
     }
 
-    constructor(address _depositContractAddress, address _eth2GateAddress) public {
+    constructor(address _depositContractAddress, address _eth2GateAddress) {
         depositContract = IDepositContract(_depositContractAddress);
         eth2Gate = IEth2Gate(_eth2GateAddress);
         unclaimedFunds = 0;
@@ -59,7 +59,7 @@ contract SerenityPool {
         // TODO: when possible with EIP-2537 or similar bls.verify(_voluntary_exit, _exit_signature, _pubkey);
         // TODO: verify that epoch in _voluntary_exit is 1 year ahead
         // (issue: there could be a big lag between submitting credentials and starting actual validator)
-        Deposit memory deposit =  Deposit({
+        Deposit memory userDeposit =  Deposit({
             pubKey : _pubKey,
             withdrawalCredentials : _withdrawalCredentials,
             signature : _signature,
@@ -68,7 +68,7 @@ contract SerenityPool {
             exitSignature: _exitSignature,
             withdrawalContract: withdrawal
         });
-		validatorQueue.enqueue(deposit);
+		validatorQueue.enqueue(userDeposit);
     }
 
     // Converts bytes to address
@@ -147,6 +147,7 @@ contract SerenityPool {
         IWithdrawalContract withdrawal,
         bytes calldata _withdrawalCredentials
     )
+    view
     private
     {
         address withdrawalAddress = withdrawal.getAddress();

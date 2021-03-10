@@ -28,7 +28,7 @@ contract Eth2Gate is IEth2Gate {
         if (msg.sender == owner) _;
     }
 
-    constructor() public {
+    constructor() {
         owner = payable(msg.sender);
     }
 
