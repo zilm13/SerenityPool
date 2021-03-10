@@ -1,7 +1,6 @@
 const SerenityPool = artifacts.require("SerenityPool");
 const DepositContract = artifacts.require("DepositContract");
 const WithdrawalContract = artifacts.require("WithdrawalContract");
-const SystemContract = artifacts.require("SystemContract");
 const Eth2Gate = artifacts.require("Eth2Gate");
 const truffleAssert = require('truffle-assertions');
 const {wrapWithBuffer, convertLittleEndianToInt, generateDepositCredentials} = require("../util");
@@ -16,16 +15,6 @@ const valCredentials = {
 }
 
 contract('SerenityPool', (accounts) => {
-    before(async () => {
-        // ETH2 Withdrawals system contract
-        systemContractInstance = await SystemContract.new();
-        assert.ok(systemContractInstance);
-        let ether99 = web3.utils.toWei("99", 'ether');
-        await systemContractInstance.deposit({from: accounts[0], value: ether99})
-        let actualBalance = await web3.eth.getBalance(systemContractInstance.address);
-        let expectedBalance = web3.utils.toBN(ether99);
-        assert.strictEqual(actualBalance, ether99.toString(), "System contract was not funded");
-    });
     beforeEach(async () => {
         // ETH2 Deposit Contract in ETH1
         depositInstance = await DepositContract.new();
