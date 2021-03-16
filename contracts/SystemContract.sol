@@ -22,21 +22,21 @@ contract SystemContract is ISystemContract {
     function deposit() payable public {
     }
 
-    // TODO: remove me when beaconstateroot tests are over
+    // TODO: remove me when beaconblockroot tests are over
     function getRoot(uint slot) public returns(bytes32) {
         bytes32 root;
         assembly {
-            root := beaconstateroot(slot)
+            root := beaconblockroot(slot)
         }
         emit Logger(root);
         return root;
     }
 
-    // TODO: remove me when beaconstateroot tests are over
+    // TODO: remove me when beaconblockroot tests are over
     function verifyRoot(uint slot, bytes32 expectedRoot) public {
         bytes32 root;
         assembly {
-            root := beaconstateroot(slot)
+            root := beaconblockroot(slot)
         }
         require (root == expectedRoot);
     }
@@ -45,7 +45,7 @@ contract SystemContract is ISystemContract {
         require(!cashed[withdrawal.pubkeyHash]);
         bytes32 root;
         assembly {
-            root := beaconstateroot(slot)
+            root := beaconblockroot(slot)
         }
         require(root != 0x0000000000000000000000000000000000000000000000000000000000000000);
 
