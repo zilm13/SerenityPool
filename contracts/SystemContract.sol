@@ -13,13 +13,32 @@ interface ISystemContract {
 
 contract SystemContract is ISystemContract {
     mapping(bytes32 => bool) cashed;
-    uint64 constant WITHDRAWAL_GINDEX = 46;
+    uint64 constant WITHDRAWAL_GINDEX = 366;
     bytes4 constant ETH1_WITHDRAWAL_ADDRESS_PREFIX = 0x01000000;
     // TODO: remove me when not needed
     event Logger(bytes32 data);
 
     // FIXME: In real system contract ETH should be minted by block producer
     function deposit() payable public {
+    }
+
+    // TODO: remove me when beaconstateroot tests are over
+    function getRoot(uint slot) public returns(bytes32) {
+        bytes32 root;
+        assembly {
+            root := beaconstateroot(slot)
+        }
+        emit Logger(root);
+        return root;
+    }
+
+    // TODO: remove me when beaconstateroot tests are over
+    function verifyRoot(uint slot, bytes32 expectedRoot) public {
+        bytes32 root;
+        assembly {
+            root := beaconstateroot(slot)
+        }
+        require (root == expectedRoot);
     }
 
     function withdraw(uint slot, bytes32[] calldata proof, uint64 gIndex, Withdrawal calldata withdrawal) override public {
