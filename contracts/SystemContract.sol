@@ -8,7 +8,7 @@ pragma experimental ETH2OpCodes;
 
 // Mock of withdrawals system contract
 interface ISystemContract {
-    function withdraw(uint slot, bytes32[] calldata proof, uint64 g_index, Withdrawal calldata withdrawal) external;
+    function withdraw(uint slot, bytes32[] calldata proof, uint64 gIndex, Withdrawal calldata withdrawal) external;
 }
 
 contract SystemContract is ISystemContract {
@@ -41,45 +41,45 @@ contract SystemContract is ISystemContract {
         require (root == expectedRoot);
     }
 
-    function withdraw(uint slot, bytes32[] calldata proof, uint64 gIndex, Withdrawal calldata withdrawal) override public {
-        require(!cashed[withdrawal.pubkeyHash]);
+    function withdraw(uint _slot, bytes32[] calldata _proof, uint64 _gIndex, Withdrawal calldata _withdrawal) override public {
+        require(!cashed[_withdrawal.pubkeyHash]);
         bytes32 root;
         assembly {
-            root := beaconblockroot(slot)
+            root := beaconblockroot(_slot)
         }
         require(root != 0x0000000000000000000000000000000000000000000000000000000000000000);
 
         // Check is eth1 withdrawal
-        require(withdrawal.withdrawalTarget == ETH1_WITHDRAWAL_ADDRESS_PREFIX);
+        require(_withdrawal.withdrawalTarget == ETH1_WITHDRAWAL_ADDRESS_PREFIX);
 
         // Check gIndex is a part of List<Withdrawal> in BeaconState
-        require(_verifyIsChild(WITHDRAWAL_GINDEX, gIndex));
+        require(_verifyIsChild(WITHDRAWAL_GINDEX, _gIndex));
 
         // Compute withdrawal node root
-        bytes32 node = _computeWithdrawalRoot(withdrawal);
+        bytes32 node = _computeWithdrawalRoot(_withdrawal);
 
         // Verify merkle proof
-        require(_verifyMerkleProof(node, proof, gIndex, root));
+        require(_verifyMerkleProof(node, _proof, _gIndex, root));
 
         // Pay
-        address target = _toAddress(withdrawal.withdrawalCredentials, 12);
-        cashed[withdrawal.pubkeyHash] = true;
+        address target = _toAddress(_withdrawal.withdrawalCredentials, 12);
+        cashed[_withdrawal.pubkeyHash] = true;
         address payable targetPayable = payable(target);
-        targetPayable.transfer(withdrawal.amount);
+        targetPayable.transfer(_withdrawal.amount);
     }
 
     // Compute withdrawal root (`Withdrawal` hash tree root)
-    function _computeWithdrawalRoot(Withdrawal memory withdrawal) internal returns (bytes32) {
+    function _computeWithdrawalRoot(Withdrawal memory _withdrawal) internal returns (bytes32) {
         bytes32 two_root = sha256(abi.encodePacked(
-                sha256(abi.encodePacked(withdrawal.pubkeyHash, withdrawal.withdrawalTarget, bytes28(0))),
+                sha256(abi.encodePacked(_withdrawal.pubkeyHash, _withdrawal.withdrawalTarget, bytes28(0))),
                 sha256(abi.encodePacked(
-                        withdrawal.withdrawalCredentials,
-                            _toLittleEndian64(withdrawal.amount),
+                        _withdrawal.withdrawalCredentials,
+                            _toLittleEndian64(_withdrawal.amount),
                             bytes24(0)
                     ))
             ));
         bytes32 three_root = sha256(abi.encodePacked(
-                sha256(abi.encodePacked(_toLittleEndian64(withdrawal.epoch), bytes32(0), bytes24(0))),
+                sha256(abi.encodePacked(_toLittleEndian64(_withdrawal.epoch), bytes32(0), bytes24(0))),
                 sha256(abi.encodePacked(bytes32(0), bytes32(0)))
             ));
         bytes32 node = sha256(abi.encodePacked(two_root, three_root));
@@ -87,9 +87,9 @@ contract SystemContract is ISystemContract {
         return node;
     }
 
-    function _toLittleEndian64(uint64 value) internal pure returns (bytes memory ret) {
+    function _toLittleEndian64(uint64 _value) internal pure returns (bytes memory ret) {
         ret = new bytes(8);
-        bytes8 bytesValue = bytes8(value);
+        bytes8 bytesValue = bytes8(_value);
         // Byteswapping during copying to bytes.
         ret[0] = bytesValue[7];
         ret[1] = bytesValue[6];
@@ -101,10 +101,10 @@ contract SystemContract is ISystemContract {
         ret[7] = bytesValue[0];
     }
 
-    function _verifyIsChild(uint64 gIndexParent, uint64 gIndexChild) internal pure returns (bool) {
-        uint64 gIndexCurrentParent = gIndexChild;
-        while (gIndexCurrentParent >= gIndexParent) {
-            if (gIndexParent == gIndexCurrentParent) {
+    function _verifyIsChild(uint64 _gIndexParent, uint64 _gIndexChild) internal pure returns (bool) {
+        uint64 gIndexCurrentParent = _gIndexChild;
+        while (gIndexCurrentParent >= _gIndexParent) {
+            if (_gIndexParent == gIndexCurrentParent) {
                 return true;
             }
             if (gIndexCurrentParent % 2 == 1) {
@@ -116,33 +116,33 @@ contract SystemContract is ISystemContract {
     }
 
     function _verifyMerkleProof(
-        bytes32 leaf,
-        bytes32[] calldata proof,
-        uint64 gIndex,
-        bytes32 root
+        bytes32 _leaf,
+        bytes32[] calldata _proof,
+        uint64 _gIndex,
+        bytes32 _root
     )
     internal
     pure
     returns (bool)
     {
-        return _calculateMerkleRoot(leaf, proof, gIndex) == root;
+        return _calculateMerkleRoot(_leaf, _proof, _gIndex) == _root;
     }
 
-    function _calculateMerkleRoot(bytes32 leaf, bytes32[] calldata proof, uint64 index) internal pure returns (bytes32) {
-        assert(proof.length == _getGeneralizedIndexLength(index));
-        for (uint i = 0; i < proof.length; i++) {
-            bytes32 hash = proof[i];
-            if (_getGeneralizedIndexBit(index, i)) {
-                leaf = sha256(abi.encodePacked(hash, leaf));
+    function _calculateMerkleRoot(bytes32 _leaf, bytes32[] calldata _proof, uint64 _index) internal pure returns (bytes32) {
+        assert(_proof.length == _getGeneralizedIndexLength(_index));
+        for (uint i = 0; i < _proof.length; i++) {
+            bytes32 hash = _proof[i];
+            if (_getGeneralizedIndexBit(_index, i)) {
+                _leaf = sha256(abi.encodePacked(hash, _leaf));
             } else {
-                leaf = sha256(abi.encodePacked(leaf, hash));
+                _leaf = sha256(abi.encodePacked(_leaf, hash));
             }
         }
-        return leaf;
+        return _leaf;
     }
 
-    function _getGeneralizedIndexLength(uint64 index) internal pure returns (uint64) {
-        return uint64(_log2Floor(index));
+    function _getGeneralizedIndexLength(uint64 _index) internal pure returns (uint64) {
+        return uint64(_log2Floor(_index));
     }
 
     // Method copy-pasted from https://ethereum.stackexchange.com/a/30168
@@ -179,14 +179,14 @@ contract SystemContract is ISystemContract {
         return (y - 1);
     }
 
-    function _getGeneralizedIndexBit(uint64 index, uint position) internal pure returns (bool) {
-        return (index & (1 << position)) > 0;
+    function _getGeneralizedIndexBit(uint64 _index, uint _position) internal pure returns (bool) {
+        return (_index & (1 << _position)) > 0;
     }
 
-    function _first8BytesToUint(bytes32 b) internal pure returns (uint64) {
+    function _first8BytesToUint(bytes32 _b) internal pure returns (uint64) {
         uint number;
         for (uint i = 0; i < 8; i++) {
-            number = number + uint(uint8(b[i])) * (2 ** (8 * (8 - (i + 1))));
+            number = number + uint(uint8(_b[i])) * (2 ** (8 * (8 - (i + 1))));
         }
         return uint64(number);
     }
