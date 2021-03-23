@@ -32,4 +32,21 @@ contract FundDeque {
         delete deque[last];
         last -= 1;
     }
+
+    function isEmpty() public view returns(bool) {
+        return last < first;
+    }
+
+    function getFirstIndex() public view returns(uint256) {
+        return first;
+    }
+
+    function getLastIndex() public view returns(uint256) {
+        return last;
+    }
+
+    function getElement(uint256 index) public view returns(Fund memory) {
+        require(index >= first && index <= last);
+        return deque[index];
+    }
 }

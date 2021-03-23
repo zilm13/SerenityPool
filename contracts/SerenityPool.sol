@@ -11,31 +11,40 @@ import "./DepositContract.sol";
 import "./structs/Validator.sol";
 import "./WithdrawalContract.sol";
 import "./Eth2Gate.sol";
+import "./SystemContract.sol";
+import "./structs/Withdrawal.sol";
+import "./structs/Fund.sol";
 
 contract SerenityPool {
     uint64 constant VALIDATOR_DEPOSIT = 32_000_000_000; // 32 ETH
     uint256 constant VALIDATOR_TTL = 365*24*60*60; // 1 year
     bytes4 constant WITHDRAW_FUNC_SIGNATURE = 0x0968f264; // withdraw(bytes)
+    uint constant FIXED = 10 ** 18; // multiplier for fixed point division operation
+    uint constant GWEI = 10 ** 9; // Gwei to wei multiplier
     IDepositContract public depositContract;
     IEth2Gate public eth2Gate;
+    ISystemContract public systemContract;
     address public owner;
     DepositQueue validatorQueue;
     FundDeque fundDeque;
     uint64 unclaimedFunds;
     mapping(bytes => Validator) validators;
+    mapping(address => uint) payouts;
 
     event NewFund(address indexed _from, uint64 _value);
     event NewValidator(bytes _pubKey, uint256 _time);
+    event Payout(address _investor, uint256 _amount);
     // TODO: remove me when not needed
-    event Logger(bytes data);
+    event Logger(uint data);
 
     modifier onlyOwner() {
         if (msg.sender == owner) _;
     }
 
-    constructor(address _depositContractAddress, address _eth2GateAddress) {
+    constructor(address _depositContractAddress, address _eth2GateAddress, address _systemContractAddress) {
         depositContract = IDepositContract(_depositContractAddress);
         eth2Gate = IEth2Gate(_eth2GateAddress);
+        systemContract = ISystemContract(_systemContractAddress);
         unclaimedFunds = 0;
         validatorQueue = new DepositQueue();
         fundDeque = new FundDeque();
@@ -86,7 +95,6 @@ contract SerenityPool {
     }
 
     // TODO: WHERE IS MY TOKEN???
-    // FIXME: return type is unnecessary
     function deposit() payable public {
         require(validatorQueue.isNotEmpty());
         // Check deposit amount
@@ -122,19 +130,45 @@ contract SerenityPool {
     }
 
     // Calls Withdrawal System Contract to get money from exited validator
-    function withdraw(bytes calldata _pubKey) public {
+    function withdraw(bytes calldata _pubKey, uint _slot, bytes32[] calldata _proof, uint64 _gIndex, Withdrawal calldata _withdrawal) public {
         Validator memory validator = validators[_pubKey];
-        // TODO: require by eth2 OPCODE that validator is exited
 
-        // TODO: call withdraw system contract
-        // TODO: if it's ok, claim money from withdrawal contract and destroy it
-        // TODO: if not ok??
+        // Call withdraw system contract
+        systemContract.withdraw(_slot, _proof, _gIndex, _withdrawal);
+
+        // Claim money from withdrawal contract
+        uint amount = validator.withdrawalContract.withdraw();
+        amount = amount / GWEI;
+        // TODO: destroy withdrawal contract
+
         // TODO: eat service fee
+
+        // Split remaining funds among shares
+        require(!validator.shares.isEmpty());
+        uint investedAmount = 0;
+        for (uint i = validator.shares.getFirstIndex(); i <= validator.shares.getLastIndex(); i++) {
+            investedAmount += validator.shares.getElement(i).amount;
+        }
+
+        uint coeff = (amount * FIXED)/investedAmount;
+
+        while (!validator.shares.isEmpty()) {
+            Fund memory share = validator.shares.popLeft();
+            uint shareAmount = (share.amount * coeff)/FIXED;
+            payouts[share.from] = shareAmount;
+            emit Payout(share.from, shareAmount);
+        }
     }
 
+    // Receiver from withdraw contract
+    receive() external payable {}
+
     // Claims user's funds
-    // TODO
-    function redeem(bytes calldata _pubKey) public {
+    function redeem() public {
+        require(payouts[msg.sender] != 0);
+        address payable senderPayable = payable(msg.sender);
+        senderPayable.transfer(payouts[msg.sender] * GWEI);
+        payouts[msg.sender] = 0;
     }
 
     // Returns value of funds queued for validator deposits

@@ -2,6 +2,7 @@ const SerenityPool = artifacts.require("SerenityPool");
 const DepositContract = artifacts.require("DepositContract");
 const WithdrawalContract = artifacts.require("WithdrawalContract");
 const Eth2Gate = artifacts.require("Eth2Gate");
+const SystemContract = artifacts.require("SystemContract");
 const truffleAssert = require('truffle-assertions');
 const {wrapWithBuffer, convertLittleEndianToInt, generateDepositCredentials} = require("../util");
 
@@ -15,6 +16,15 @@ const valCredentials = {
 }
 
 contract('SerenityPool', (accounts) => {
+    before(async () => {
+        // ETH2 Withdrawals system contract
+        systemContractInstance = await SystemContract.new();
+        assert.ok(systemContractInstance);
+        let ether99 = web3.utils.toWei("99", 'ether');
+        await systemContractInstance.deposit({from: accounts[2], value: ether99})
+        let actualBalance = await web3.eth.getBalance(systemContractInstance.address);
+        assert.strictEqual(actualBalance, ether99.toString(), "System contract was not funded");
+    });
     beforeEach(async () => {
         // ETH2 Deposit Contract in ETH1
         depositInstance = await DepositContract.new();
@@ -25,7 +35,7 @@ contract('SerenityPool', (accounts) => {
         assert.ok(eth2Gate);
 
         // Shared validator ownership pool
-        poolInstance = await SerenityPool.new(depositInstance.address, eth2Gate.address);
+        poolInstance = await SerenityPool.new(depositInstance.address, eth2Gate.address, systemContractInstance.address);
         assert.ok(poolInstance);
         const creds = await generateDepositCredentials(wrapWithBuffer(poolInstance.address),
             wrapWithBuffer(WithdrawalContract.bytecode));
@@ -60,7 +70,6 @@ contract('SerenityPool', (accounts) => {
         assert.strictEqual(unclaimed.valueOf().toString(), ether10gwei, "10 ethers should be unclaimed");
     });
     it('should deposit to deposit contract', async () => {
-        let accounts = await web3.eth.getAccounts();
         await poolInstance.preLoadCredentials(
             valCredentials.pubKey,
             valCredentials.withdrawalCredentials,

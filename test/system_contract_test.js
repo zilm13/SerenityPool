@@ -1,4 +1,3 @@
-const SystemContract = artifacts.require("SystemContract");
 const TestableSystemContract = artifacts.require("TestableSystemContract");
 const truffleAssert = require('truffle-assertions');
 
@@ -69,13 +68,6 @@ const withdrawalRoot = "0xc8674de0f4e39ac81ac06a210742d91df18b03d76c713dac20f069
 
 contract('SystemContract', (accounts) => {
     before(async () => {
-        // ETH2 Withdrawals system contract
-        systemContractInstance = await SystemContract.new();
-        assert.ok(systemContractInstance);
-        let ether99 = web3.utils.toWei("99", 'ether');
-        await systemContractInstance.deposit({from: accounts[0], value: ether99})
-        let actualBalance = await web3.eth.getBalance(systemContractInstance.address);
-        assert.strictEqual(actualBalance, ether99.toString(), "System contract was not funded");
         testableSystemContractInstance = await TestableSystemContract.new();
         assert.ok(testableSystemContractInstance);
     });

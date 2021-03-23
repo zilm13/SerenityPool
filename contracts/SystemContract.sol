@@ -9,17 +9,19 @@ pragma experimental ETH2OpCodes;
 // Mock of withdrawals system contract
 interface ISystemContract {
     function withdraw(uint slot, bytes32[] calldata proof, uint64 gIndex, Withdrawal calldata withdrawal) external;
+    function deposit() payable external;
 }
 
 contract SystemContract is ISystemContract {
     mapping(bytes32 => bool) cashed;
     uint64 constant WITHDRAWAL_GINDEX = 366;
     bytes4 constant ETH1_WITHDRAWAL_ADDRESS_PREFIX = 0x01000000;
+    uint constant GWEI = 10 ** 9; // Gwei to wei multiplier
     // TODO: remove me when not needed
     event Logger(bytes32 data);
 
     // FIXME: In real system contract ETH should be minted by block producer
-    function deposit() payable public {
+    function deposit() payable override public {
     }
 
     // TODO: remove me when beaconblockroot tests are over
@@ -62,10 +64,10 @@ contract SystemContract is ISystemContract {
         require(_verifyMerkleProof(node, _proof, _gIndex, root));
 
         // Pay
-        address target = _toAddress(_withdrawal.withdrawalCredentials, 12);
+        address target = _toAddress(abi.encodePacked(_withdrawal.withdrawalCredentials), 12);
         cashed[_withdrawal.pubkeyHash] = true;
         address payable targetPayable = payable(target);
-        targetPayable.transfer(_withdrawal.amount);
+        targetPayable.transfer(_withdrawal.amount * GWEI);
     }
 
     // Compute withdrawal root (`Withdrawal` hash tree root)
@@ -193,7 +195,7 @@ contract SystemContract is ISystemContract {
 
     // Converts bytes to address
     // Copied from https://github.com/GNSPS/solidity-bytes-utils/blob/master/contracts/BytesLib.sol
-    function _toAddress(bytes32 _bytes, uint256 _start) internal pure returns (address) {
+    function _toAddress(bytes memory _bytes, uint256 _start) internal pure returns (address) {
         require(_start + 20 >= _start, "toAddress_overflow");
         require(_bytes.length >= _start + 20, "toAddress_outOfBounds");
         address tempAddress;
