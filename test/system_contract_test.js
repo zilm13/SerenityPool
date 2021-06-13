@@ -2,9 +2,9 @@ const TestableSystemContract = artifacts.require("TestableSystemContract");
 const truffleAssert = require('truffle-assertions');
 
 const withdrawalProof = {
-    stateRoot: "0x854662e7be46468c332ab66b520ebaec0ecabf24ccce23fa57891a27ba183203",
-    slot: 252,
-    proof: [
+    beacon_block_root: "0x38f2c03adf149f9610f374a005acbfb0d057ae07e0e2c8cb507f2644425c2728",
+    slot: 317,
+    "proof": [
         "0x0000000000000000000000000000000000000000000000000000000000000000",
         "0xf5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
         "0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
@@ -47,24 +47,23 @@ const withdrawalProof = {
         "0xad21b516cbc645ffe34ab5de1c8aef8cd4e7f8d2b51e8e1456adc7563cda206f",
         "0x0100000000000000000000000000000000000000000000000000000000000000",
         "0x536d98837f2dd165a55d5eeae91485954472d56f246df256bf3cae19352a123c",
-        "0x8273c7a980cf09af613d6030553a6eb36c40674e81ce47a972391a36386f8ecd",
-        "0xe9d943b2f56e7c971122b2e9221fedd6d7502e8679fbf1f312c8f2fbb4ed9721",
-        "0xbdcf82fe7ea62cf8e485a8903e380dea02eb20aad4bfc2eed07233a2d3eb5ddb",
-        "0x7b215a73b51222078c7be26bf00017ce4d835c8235fc5595040df71646e7ee9c",
-        "0x4184b1e1ddb9374ec1d2342b6dd68cff805f4a6b3882c0076ed0916890e824ec",
-        "0x6c9b4b09f216dc06f29013510592d318a810ea4b79e174718f931c6a17d1124b",
-        "0x45c342f80c0150d3a817d5df1d8b37971a8d6d5abfd0150acf67f06d6a69f775"
+        "0x81ac0e1a936f760b6d217f9bf2f52d8b969e45a1656ef4125686c74d7c4fb820",
+        "0x14df84fbd6ab4388b22dd58820c24c726f898954867044c4fdccc3f25bd47813",
+        "0xb96a6a778353d642c84da8998df0321d0b67a5baa612d42550ad9d37330555a8",
+        "0x5e139053bcdf3ecd0c35d456771e06f79c9cdfb0b9edc46dd90ec815e581cf7a",
+        "0x7e67890a35d39d78e1d78c30c08c44bc4a0109d235436921aa91447fe21e1e8c",
+        "0x40fec3a3fc566f3b12fda464c6519fc62c1077b8fc578cf5add9acf9fd9029fa",
+        "0xa54cdc929aa0cb963d3f0012efda635fc46e696b3b99909f7ed8b6d957cb5fc6"
     ],
-    index: "804842511532032",
-    withdrawal: {
-        "pubkeyHash": "0x8210e6a59d1ede86277c7fec7893f270a075c9f67c465e50308c317dd98c0eb4",
-        "withdrawalTarget": "0x01000000",
-        "withdrawalCredentials": "0x010000000000000000000000ed3f2a4f6b1f89b1be9432b712ac8944159ff097",
-        "amount": "32000000000",
-        "epoch": "30"
+    "index": "804842511532032",
+    "withdrawal": {
+        "validator_index": "63",
+        "withdrawal_credentials": "0x01000000000000000000000099dd36a29303858bef7961130c82d20888415b59",
+        "withdrawn_epoch": "32",
+        "amount": "32015412278"
     }
 };
-const withdrawalRoot = "0xc8674de0f4e39ac81ac06a210742d91df18b03d76c713dac20f06976224801ab";
+const withdrawalRoot = "0x5dcec98807ed47626d7346fafc9bed97614bfed2eb4b6a33a9b44cb6a2a3383d";
 
 contract('SystemContract', (accounts) => {
     before(async () => {
@@ -90,14 +89,14 @@ contract('SystemContract', (accounts) => {
             withdrawalRoot,
             withdrawalProof.proof,
             withdrawalProof.index,
-            withdrawalProof.stateRoot
+            withdrawalProof.beacon_block_root
         );
         assert.strictEqual(result1, true);
         let result2 = await testableSystemContractInstance.verifyMerkleProof.call(
             "0xc06b65e847ece47e475e5e7653f201efd583abacee042ad85cd86c403c4bb6d5", // wrong withdrawal node
             withdrawalProof.proof,
             withdrawalProof.index,
-            withdrawalProof.stateRoot
+            withdrawalProof.beacon_block_root
         );
         assert.strictEqual(result2, false);
         let corruptedProof = withdrawalProof.proof.slice(0, withdrawalProof.proof.length - 1);
@@ -106,14 +105,14 @@ contract('SystemContract', (accounts) => {
             withdrawalRoot,
             corruptedProof,
             withdrawalProof.index,
-            withdrawalProof.stateRoot
+            withdrawalProof.beacon_block_root
         );
         assert.strictEqual(result3, false);
         await truffleAssert.fails(testableSystemContractInstance.verifyMerkleProof.call(
             withdrawalRoot,
             withdrawalProof.proof,
             withdrawalProof.index + 1,
-            withdrawalProof.stateRoot
+            withdrawalProof.beacon_block_root
         ), "VM Exception while processing transaction: revert");
         let result5 = await testableSystemContractInstance.verifyMerkleProof.call(
             withdrawalRoot,

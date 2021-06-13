@@ -9,7 +9,7 @@ pragma experimental ETH2OpCodes;
 
 contract TestableSystemContract is SystemContract {
     function computeWithdrawalRoot(Withdrawal calldata withdrawal) public returns (bytes32) {
-        return _computeWithdrawalRoot(withdrawal);
+        return withdrawalUtil._computeWithdrawalRoot(withdrawal);
     }
 
     function verifyIsWithdrawalChild(uint64 gIndexChild) pure public returns (bool) {

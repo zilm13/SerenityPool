@@ -2,6 +2,7 @@
 pragma solidity >=0.6.11 <0.8.2;
 
 import "./structs/Withdrawal.sol";
+import "./lib/WithdrawalUtil.sol";
 
 pragma experimental ABIEncoderV2;
 pragma experimental ETH2OpCodes;
@@ -17,8 +18,13 @@ contract SystemContract is ISystemContract {
     uint64 constant WITHDRAWAL_GINDEX = 366;
     bytes4 constant ETH1_WITHDRAWAL_ADDRESS_PREFIX = 0x01000000;
     uint constant GWEI = 10 ** 9; // Gwei to wei multiplier
+    WithdrawalUtil withdrawalUtil;
     // TODO: remove me when not needed
     event Logger(bytes32 data);
+
+    constructor() {
+        withdrawalUtil = new WithdrawalUtil();
+    }
 
     // FIXME: In real system contract ETH should be minted by block producer
     function deposit() payable override public {
@@ -43,7 +49,10 @@ contract SystemContract is ISystemContract {
     }
 
     function withdraw(uint _slot, bytes32[] calldata _proof, uint64 _gIndex, Withdrawal calldata _withdrawal) override public {
-        require(!cashed[_withdrawal.pubkeyHash]);
+        // Compute withdrawal node root
+        bytes32 node = withdrawalUtil._computeWithdrawalRoot(_withdrawal);
+        require(!cashed[node]);
+
         bytes32 root;
         assembly {
             root := beaconblockroot(_slot)
@@ -51,54 +60,20 @@ contract SystemContract is ISystemContract {
         require(root != 0x0000000000000000000000000000000000000000000000000000000000000000);
 
         // Check is eth1 withdrawal
-        require(_withdrawal.withdrawalTarget == ETH1_WITHDRAWAL_ADDRESS_PREFIX);
+        bytes4 withdrawalTarget = _stripPrefix(abi.encodePacked(_withdrawal.withdrawal_credentials));
+        require(withdrawalTarget == ETH1_WITHDRAWAL_ADDRESS_PREFIX);
 
         // Check gIndex is a part of List<Withdrawal> in BeaconState
         require(_verifyIsChild(WITHDRAWAL_GINDEX, _gIndex));
-
-        // Compute withdrawal node root
-        bytes32 node = _computeWithdrawalRoot(_withdrawal);
 
         // Verify merkle proof
         require(_verifyMerkleProof(node, _proof, _gIndex, root));
 
         // Pay
-        address target = _toAddress(abi.encodePacked(_withdrawal.withdrawalCredentials), 12);
-        cashed[_withdrawal.pubkeyHash] = true;
+        address target = _toAddress(abi.encodePacked(_withdrawal.withdrawal_credentials), 12);
+        cashed[node] = true;
         address payable targetPayable = payable(target);
         targetPayable.transfer(_withdrawal.amount * GWEI);
-    }
-
-    // Compute withdrawal root (`Withdrawal` hash tree root)
-    function _computeWithdrawalRoot(Withdrawal memory _withdrawal) internal returns (bytes32) {
-        bytes32 two_root = sha256(abi.encodePacked(
-                sha256(abi.encodePacked(_withdrawal.pubkeyHash, _withdrawal.withdrawalTarget, bytes28(0))),
-                sha256(abi.encodePacked(
-                        _withdrawal.withdrawalCredentials,
-                            _toLittleEndian64(_withdrawal.amount),
-                            bytes24(0)
-                    ))
-            ));
-        bytes32 three_root = sha256(abi.encodePacked(
-                sha256(abi.encodePacked(_toLittleEndian64(_withdrawal.epoch), bytes32(0), bytes24(0))),
-                sha256(abi.encodePacked(bytes32(0), bytes32(0)))
-            ));
-        bytes32 node = sha256(abi.encodePacked(two_root, three_root));
-        return node;
-    }
-
-    function _toLittleEndian64(uint64 _value) internal pure returns (bytes memory ret) {
-        ret = new bytes(8);
-        bytes8 bytesValue = bytes8(_value);
-        // Byteswapping during copying to bytes.
-        ret[0] = bytesValue[7];
-        ret[1] = bytesValue[6];
-        ret[2] = bytesValue[5];
-        ret[3] = bytesValue[4];
-        ret[4] = bytesValue[3];
-        ret[5] = bytesValue[2];
-        ret[6] = bytesValue[1];
-        ret[7] = bytesValue[0];
     }
 
     function _verifyIsChild(uint64 _gIndexParent, uint64 _gIndexChild) internal pure returns (bool) {
@@ -213,6 +188,16 @@ contract SystemContract is ISystemContract {
             number = number + uint(uint8(_b[i])) * (2 ** (8 * (8 - (i + 1))));
         }
         return uint64(number);
+    }
+
+    // Strips 4 bytes prefix from bytes input
+    function _stripPrefix(bytes memory _bytes) internal pure returns (bytes4) {
+        require(_bytes.length >= 4, "_stripPrefix_outOfBounds");
+        bytes4 tempPrefix;
+        for (uint i = 0; i < 4;i++) {
+            tempPrefix^=(bytes4(0xff000000)&_bytes[i])>>(i*8);
+        }
+        return tempPrefix;
     }
 
     // Converts bytes to address

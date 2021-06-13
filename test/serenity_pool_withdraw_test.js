@@ -87,11 +87,10 @@ contract('SerenityPool', (accounts) => {
     });
     it('Withdrawal with claim user funds should work', async () => {
         const withdrawal = {
-            "pubkeyHash": "0x8210e6a59d1ede86277c7fec7893f270a075c9f67c465e50308c317dd98c0eb4",
-            "withdrawalTarget": "0x01000000",
-            "withdrawalCredentials": valCredentials.withdrawalCredentials,
-            "amount": "32500000000", // 32.5 ETH in Gwei
-            "epoch": "30"
+            "validator_index": "42",
+            "withdrawal_credentials": valCredentials.withdrawalCredentials,
+            "withdrawn_epoch": "30",
+            "amount": "32500000000" // 32.5 ETH in Gwei
         }
         const withdrawalContractAddress = '0x' + valCredentials.withdrawalCredentials.substr(26);
         let withdrawalContractInstance = await WithdrawalContract.at(withdrawalContractAddress);

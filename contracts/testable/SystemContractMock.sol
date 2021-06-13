@@ -3,20 +3,27 @@ pragma solidity >=0.6.11 <0.8.2;
 
 import "./../SystemContract.sol";
 import "./../structs/Withdrawal.sol";
+import "./../lib/WithdrawalUtil.sol";
 
 pragma experimental ABIEncoderV2;
 pragma experimental ETH2OpCodes;
 
 contract SystemContractMock is ISystemContract {
+    WithdrawalUtil withdrawalUtil;
     mapping(bytes32 => bool) cashed;
     uint constant GWEI = 10 ** 9; // Gwei to wei multiplier
+
+    constructor() {
+        withdrawalUtil = new WithdrawalUtil();
+    }
 
     // Mock withdrawal, doesn't verify any inputs, pays _withdrawal.amount to withdrawalCredentials address
     // Records withdrawal to avoid double withdrawal
     function withdraw(uint _slot, bytes32[] calldata _proof, uint64 _gIndex, Withdrawal calldata _withdrawal) override public {
-        require(!cashed[_withdrawal.pubkeyHash]); // TODO: test me
-        address target = _toAddress(abi.encodePacked(_withdrawal.withdrawalCredentials), 12);
-        cashed[_withdrawal.pubkeyHash] = true;
+        bytes32 node = withdrawalUtil._computeWithdrawalRoot(_withdrawal);
+        require(!cashed[node]); // TODO: test me
+        address target = _toAddress(abi.encodePacked(_withdrawal.withdrawal_credentials), 12);
+        cashed[node] = true;
         address payable targetPayable = payable(target);
         targetPayable.transfer(_withdrawal.amount * GWEI);
     }
