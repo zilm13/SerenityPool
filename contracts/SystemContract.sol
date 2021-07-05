@@ -7,7 +7,7 @@ import "./lib/WithdrawalUtil.sol";
 pragma experimental ABIEncoderV2;
 pragma experimental ETH2OpCodes;
 
-// Mock of withdrawals system contract
+// Prototype of withdrawals system contract
 interface ISystemContract {
     function withdraw(uint slot, bytes32[] calldata proof, uint64 gIndex, Withdrawal calldata withdrawal) external;
     function deposit() payable external;
@@ -15,7 +15,7 @@ interface ISystemContract {
 
 contract SystemContract is ISystemContract {
     mapping(bytes32 => bool) cashed;
-    uint64 constant WITHDRAWAL_GINDEX = 366;
+    uint64 constant WITHDRAWAL_GINDEX = 374;
     bytes4 constant ETH1_WITHDRAWAL_ADDRESS_PREFIX = 0x01000000;
     uint constant GWEI = 10 ** 9; // Gwei to wei multiplier
     WithdrawalUtil withdrawalUtil;
